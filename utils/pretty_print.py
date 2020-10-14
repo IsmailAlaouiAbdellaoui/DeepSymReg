@@ -10,7 +10,7 @@ is already pruned.
 import sympy as sym
 import numpy as np
 from utils import functions
-
+import pdb
 
 def apply_activation(W, funcs, n_double=0):
     """Given an (n, m) matrix W and (m) vector of funcs, apply funcs to W.
@@ -23,10 +23,15 @@ def apply_activation(W, funcs, n_double=0):
     Returns:
         SymPy matrix with 1 column that represents the output of applying the activation functions.
     """
+    # pdb.set_trace()
+    # print("from apply activation")
+    # print("type of funcs",type(funcs))
+    
     W = sym.Matrix(W)
     if n_double == 0:
         for i in range(W.shape[0]):
             for j in range(W.shape[1]):
+                print(funcs[j])
                 W[i, j] = funcs[j](W[i, j])
     else:
         W_new = W.copy()
@@ -46,6 +51,10 @@ def apply_activation(W, funcs, n_double=0):
             W_new.col_del(-1)
         W = W_new
     return W
+
+# def apply_activation(W, funcs, n_double=0):
+#     print("from apply activation")
+#     print("lel")
 
 
 def sym_pp(W_list, funcs, var_names, threshold=0.01, n_double=0):
@@ -93,6 +102,7 @@ def network(weights, funcs, var_names, threshold=0.01):
 
     Returns:
         Simplified sympy expression."""
+    print("from network function")
     n_double = functions.count_double(funcs)
     funcs = [func.sp for func in funcs]
 

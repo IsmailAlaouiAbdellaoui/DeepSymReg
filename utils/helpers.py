@@ -22,6 +22,8 @@ def batch_generator(datasets, N, batch_size=128):
         data_shuffled = [data_i[i_arr] for data_i in datasets]
         for i_batch in batch_ind:
             yield [data_i[i_batch:i_batch + batch_size] for data_i in data_shuffled]
+            
+
 
 
 class Encoder:

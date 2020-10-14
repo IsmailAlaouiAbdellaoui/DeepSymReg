@@ -46,7 +46,7 @@ class SymbolicLayer:
 
     def build(self, in_dim):
         """Initialize weight matrix"""
-        self.W = tf.Variable(tf.random_normal(shape=[in_dim, self.out_dim], stddev=self.init_stddev))
+        self.W = tf.Variable(tf.random.normal(shape=[in_dim, self.out_dim], stddev=self.init_stddev))
         self.built = True
 
     def __call__(self, x):
@@ -114,7 +114,7 @@ class SymbolicNet:
             else:
                 self.symbolic_layers = [SymbolicLayer(funcs=funcs, init_stddev=init_stddev) for _ in range(self.depth)]
             # Initialize weights for last layer (without activation functions)
-            self.output_weight = tf.Variable(tf.random_uniform(shape=(self.symbolic_layers[-1].n_funcs, 1)))
+            self.output_weight = tf.Variable(tf.random.uniform(shape=(self.symbolic_layers[-1].n_funcs, 1)))
 
     def build(self, input_dim):
         in_dim = input_dim
@@ -124,6 +124,7 @@ class SymbolicNet:
 
     def __call__(self, input):
         self.shape = (int(input.shape[1]), 1)     # Dimensionality of the input
+        # self.shape =()
         h = input
         # Building hidden layers
         for i in range(self.depth):
@@ -152,6 +153,7 @@ class MaskedSymbolicNet(SymbolicNet):
         weights = sr_unit.get_weights()
         masked_weights = []
         for w_i in weights:
+            # print("weights_i",w_i)
             mask = tf.constant(sess.run(tf.abs(w_i) > threshold), dtype=tf.float32)
             masked_weights.append(tf.multiply(w_i, mask))
 

@@ -76,7 +76,7 @@ def main(results_dir='results/kinematics/test', learning_rate=1e-3, n_epochs=500
             if i % summary_step == 0:
                 loss_i = sess.run(loss, feed_dict=feed_dict)
                 loss_list.append(loss_i)
-                print(loss_i)
+                print("loss_i",loss_i)
 
         # Save results
         results = {
