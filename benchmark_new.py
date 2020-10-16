@@ -275,17 +275,18 @@ class Benchmark:
                     t0 = time.time()
                     # First stage of training, preceded by 0th warmup stage
                     for i in range(self.n_epochs1 + 2000):
+                    # for i in range(self.n_epochs1):
                         # batch_id = 0
                         if i < 2000:
                             lr_i = self.learning_rate * 10
                         else:
                             lr_i = self.learning_rate
-                        for batch_train_id in range(number_train_batches):
+                        for batch_train_id in range(2):
                             x_batch,y_batch = generate_data_denmark("train", batch_train_id, batch_size)
                             feed_dict = {x_placeholder: x_batch, y_placeholder: y_batch, learning_rate: lr_i}
                             if batch_train_id % 5 == 0:
                                 loss_val, error_val, reg_val, = sess.run((loss, error, reg_loss), feed_dict=feed_dict)
-                                print("loss: {:.2f}, error: {:.2f}".format(loss_val,error_val))
+                                print("aloss: {:.2f}, error: {:.2f}".format(loss_val,error_val))
                                 if np.isnan(error_val):  # If loss goes to NaN, restart training
                                     print("Nan error, breaking main loop and restarting ...")
                                     break
@@ -296,7 +297,7 @@ class Benchmark:
                         if i % self.summary_step == 0:
                             error_test_val_list = []
                             loss_val, error_val, reg_val, = sess.run((loss, error, reg_loss), feed_dict=feed_dict)
-                            for batch_test_id in range(number_test_batches):
+                            for batch_test_id in range(2):
                                 x_test, y_test = generate_data_denmark("test",batch_test_id, batch_size)
                                 # error_test = tf.losses.mean_squared_error(labels=y_test, predictions=y_hat)
                                 feed_dict_test = {x_placeholder: x_test, y_placeholder_test: y_test}
@@ -330,7 +331,7 @@ class Benchmark:
                     t2 = time.time()
                     print("starting phase2")
                     for i in range(self.n_epochs2):
-                        for batch_train_id in range(number_train_batches):
+                        for batch_train_id in range(2):
                             x_batch,y_batch = generate_data_denmark("train", batch_train_id, batch_size)
                             error_masked = tf.losses.mean_squared_error(labels=y_batch, predictions=y_hat_masked)
                             train_masked = opt.minimize(error_masked)
@@ -339,7 +340,7 @@ class Benchmark:
                         if i % self.summary_step == 0:
                             error_test_val_list = []
                             loss_val, error_val = sess.run((loss, error_masked), feed_dict=feed_dict)
-                            for batch_test_id in range(number_test_batches):
+                            for batch_test_id in range(2):
                                 x_test, y_test = generate_data_denmark("test",batch_test_id, batch_size)
                                 error_test_masked = tf.losses.mean_squared_error(labels=y_test, predictions=y_hat_masked)
                                 error_test_val = sess.run(error_test_masked, feed_dict={x_placeholder: x_test})
@@ -357,6 +358,8 @@ class Benchmark:
 
                 # Print the expressions
                 weights = sess.run(sym_masked.get_weights())
+                print(type(weights))
+                sys.exit()
                 expr = pretty_print.network(weights, self.activation_funcs, var_names[:x_dim])
                 print("Formula from pretty print:",expr)
 
@@ -414,7 +417,7 @@ if __name__ == "__main__":
     #                 func_name="sin(2pix)+sin(4py)", trials=5)
     # bench.benchmark(lambda x, y, z: 0.5*x*y + 0.5*z, func_name="0.5xy+0.5z", trials=5)
     # bench.benchmark(lambda x, y, z,a,b,c: 0.5*x*y + 0*z, func_name="0.5xy+0z", trials=5)
-    bench.benchmark(lambda a, b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z: a**2 + b*0+r**2+d*0+e*0+f*0, func_name="denmark_test1", trials=5)
+    bench.benchmark(lambda a, b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z: a**2 + b*0+r**2+d*0+e*0+f*0, func_name="denmark_test1", trials=1)
     # bench.benchmark(lambda x, y, z, a, b, c: 0.5*x*y + 0*z + 0*a + 0*b+ 0*c, func_name="0.5xy+0z+0a+0b+0c", trials=5)
     # bench.benchmark(lambda x, y, z: x**2 + y - 2*z, func_name="x^2+y-2z", trials=5)
     # bench.benchmark(lambda x: np.exp(-x**2), func_name="e^-x^2", trials=5)
