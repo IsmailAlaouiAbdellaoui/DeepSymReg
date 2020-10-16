@@ -408,7 +408,7 @@ for item in weights:
 # import sympy
 expr = pretty_print.network(final_weights_list, activation_funcs, var_names[:x_dim])
 print("Formula from pretty print:",expr)
-print(str(expr))
+# print(str(expr))
 from pytexit import py2tex
 latex = py2tex(str(expr))
 # latex_version = sympy.latex(eval(str(expr)))
