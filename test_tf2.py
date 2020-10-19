@@ -13,7 +13,15 @@ import numpy as np
 import h5py
 from pytexit import py2tex
 from matplotlib import pyplot as plt 
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from options import config
+import new_utils as nutils
 
+
+filename = "scale1.mat"
+data = loadmat('Denmark_data/{}'.format(filename))
+y_min = data["y_min_tr"][0][0]
+y_max = data["y_max_tr"][0][0]
 
 
 policy = mixed_precision.Policy('mixed_float16')
@@ -186,42 +194,29 @@ model = SymbolicNet(n_layers,
                                            tf.random.truncated_normal([width, width + n_double], stddev=init_sd_middle),
                                            tf.random.truncated_normal([width, 1], stddev=init_sd_last)])
 # @tf.function
-def custom_loss(model, x, y_real):
+def custom_loss(model, x, y_real, use_rescaled,reg_weight):
     y_predicted = model(x)
-    reg_weight = 5e-3
-    error = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.AUTO)(y_real, y_predicted)#double check
+    # reg_weight = 5e-3
+    # reg_weight = 5e-2
+    if use_rescaled:
+        y_predicted_rescaled = y_predicted * (y_max - y_min) + y_min
+        y_real_rescaled = y_real * (y_max - y_min) + y_min
+        error = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.AUTO)(y_real_rescaled, y_predicted_rescaled)#double check
+    else:
+        error = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.AUTO)(y_real, y_predicted)
     reg_loss = l12_smooth(model.get_weights())
     loss = error + reg_weight * reg_loss
     return loss
 
-# @tf.function
-def grad(model, inputs, targets):
+def grad(model, inputs, targets,use_rescaled_loss,reg_weight):
     with tf.GradientTape() as tape:
-        loss_value = custom_loss(model, inputs, targets)
+        loss_value = custom_loss(model, inputs, targets,use_rescaled_loss,reg_weight)
     return loss_value, tape.gradient(loss_value, model.get_weights())
     
 
 
-# for k,v in model.__dict__.items():
-#     print(k)
-
-# loss_value, grads = grad(model, x, y)
-
-# train_op.apply_gradients(zip(grads, model.get_weights()))
-
-# y_hat = sym(x)
-# print(y_hat.shape)
-# @tf.function
-
-
-batch_size = 200
-# number_train_batches = 86761//batch_size #86761 : total size of Denmark dataset train
-first_phase_lr = 1e-4
-second_phase_lr = first_phase_lr/10
-def train_non_masked(epochs_first_phase):
-    train_op = tf.keras.optimizers.RMSprop(learning_rate=first_phase_lr)
-    # num_epochs = 50
-    # number_batches = 86761//batch_size
+def train_non_masked(epochs_first_phase,train_op,use_rescaled_loss,reg_weight):
+    # train_op = tf.keras.optimizers.RMSprop(learning_rate=first_phase_lr)
     train_loss_results = []
     x_train,y_train = generate_all_data("train")
     x_test,y_test = generate_all_data("test")
@@ -243,7 +238,7 @@ def train_non_masked(epochs_first_phase):
             for x,y in bar_train:               
                 bar_train.set_description("Epoch {}".format(epoch+1))
                 y_prediction = model(x)
-                loss_value, grads = grad(model, x, y)
+                loss_value, grads = grad(model, x, y,use_rescaled_loss,reg_weight)
                 train_op.apply_gradients(zip(grads, model.get_weights()))
                 # mse = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.AUTO)(y, y_prediction)
                 epoch_loss_avg.update_state(y,y_prediction)  # Add current batch loss
@@ -260,12 +255,11 @@ def train_non_masked(epochs_first_phase):
 
         print("\n\nValidation\n")
         epoch_loss_avg_val = tf.keras.metrics.MeanSquaredError()
-        # count_val = 1
         with tqdm(val_dataset,position = 0, leave = True,colour="#99b433") as bar_val:
             for x_val,y_val in bar_val:
                 sleep(0.05)
                 y_prediction_val = model(x_val)
-                loss_value_val, grads = grad(model, x_val, y_val)
+                loss_value_val, grads = grad(model, x_val, y_val,use_rescaled_loss,reg_weight)
                 epoch_loss_avg_val.update_state(y_val,y_prediction_val)
                 if np.isnan(loss_value_val) or np.isnan(epoch_loss_avg_val.result()):
                     sys.exit("Nan value, stopping")
@@ -289,20 +283,21 @@ def train_non_masked(epochs_first_phase):
                 
     return best_val_model,best_val_weights
 
-def train_masked(best_val_weights,epochs_second_phase,threshold=0.01,from_file = False,filename = None):
-    if from_file:
+# def train_masked(best_val_weights,epochs_second_phase,use_rescaled_loss,threshold=0.01,from_file = False,filename = None):
+def train_masked(best_val_weights,epochs_second_phase,use_rescaled_loss,**kwargs):
+    if kwargs["from_file"]:
         weights = load_weights(filename)
         masked_weights = []
         for item in weights:
             # mask = (abs(item)>threshold)
-            mask = tf.cast(tf.constant(tf.abs(item) > threshold),tf.float32)
+            mask = tf.cast(tf.constant(tf.abs(item) > kwargs["threshold"]),tf.float32)
             masked_weights.append(np.multiply(mask,item))
     else:
         weights = best_val_weights
         masked_weights = []
         # masks = []
         for w_i in weights:
-            mask = tf.cast(tf.constant(tf.abs(w_i) > threshold),tf.float32)
+            mask = tf.cast(tf.constant(tf.abs(w_i) > kwargs["threshold"]),tf.float32)
             # masks.append(mask)
             masked_weights.append(tf.multiply(w_i, mask))
         
@@ -312,8 +307,6 @@ def train_masked(best_val_weights,epochs_second_phase,threshold=0.01,from_file =
     
     
     train_op = tf.keras.optimizers.RMSprop(learning_rate=second_phase_lr)
-    # num_epochs = 50
-    # number_batches = 86761//batch_size
     train_loss_results = []
     x_train,y_train = generate_all_data("train")
     x_test,y_test = generate_all_data("test")
@@ -335,7 +328,7 @@ def train_masked(best_val_weights,epochs_second_phase,threshold=0.01,from_file =
             for x,y in bar_train:               
                 bar_train.set_description("Epoch {}".format(epoch+1))
                 y_prediction = masked_model(x)
-                loss_value, grads = grad(masked_model, x, y)
+                loss_value, grads = grad(masked_model, x, y,kwargs["use_rescaled_loss"],kwargs["reg_weight"])
                 train_op.apply_gradients(zip(grads, masked_model.get_weights()))
                 # mse = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.AUTO)(y, y_prediction)
                 epoch_loss_avg.update_state(y,y_prediction)  # Add current batch loss
@@ -352,12 +345,11 @@ def train_masked(best_val_weights,epochs_second_phase,threshold=0.01,from_file =
 
         print("\n\nValidation\n")
         epoch_loss_avg_val = tf.keras.metrics.MeanSquaredError()
-        # count_val = 1
         with tqdm(val_dataset,position = 0, leave = True,colour="#cc3333") as bar_val:
             for x_val,y_val in bar_val:
                 sleep(0.05)
                 y_prediction_val = masked_model(x_val)
-                loss_value_val, grads = grad(masked_model, x_val, y_val)
+                loss_value_val, grads = grad(masked_model, x_val, y_val,kwargs["use_rescaled_loss"],kwargs["reg_weight"])
                 epoch_loss_avg_val.update_state(y_val,y_prediction_val)
                 if np.isnan(loss_value_val) or np.isnan(epoch_loss_avg_val.result()):
                     sys.exit("Nan value, stopping")
@@ -389,9 +381,7 @@ def train_masked(best_val_weights,epochs_second_phase,threshold=0.01,from_file =
                 
     return best_val_model,best_val_weights
                 
-    
-            
-    
+      
 def test_save_load():
     model = SymbolicNet(n_layers,
                           funcs=activation_funcs,
@@ -443,22 +433,17 @@ def test_save_load():
         
     assert epoch_loss_avg_val2.result() == epoch_loss_avg_val.result(), sys.exit("Not the same weights")
         
-    
-    
-    
-    
-    
-  
-# test_save_load()
 
 
-
-def get_equation_from_training_weights(threshold = 0.01):
-    weights = load_weights("val_weights_5.38e-03.hdf5")
-    final_weights_list = []
-    for item in weights:
-        mask = (abs(item)>threshold)
-        final_weights_list.append(np.multiply(mask,item))
+def get_equation_from_training_weights(filename,threshold = 0.01,need_threshold = False):
+    weights = load_weights(filename)
+    if need_threshold:
+        final_weights_list = []
+        for item in weights:
+            mask = (abs(item)>threshold)
+            final_weights_list.append(np.multiply(mask,item))
+    else:
+        final_weights_list = weights
         
     expr = pretty_print.network(final_weights_list, activation_funcs, var_names[:x_dim])
     print("Formula from pretty print:",expr)
@@ -471,7 +456,7 @@ def get_latex_equation_from_string(string):
     return py2tex(string)
     
 def plot_predict_from_saved_weights(filename,threshold = 0.01,need_threshold = False):
-    weights = load_weights("phase2_val_weights_5.99e-03.hdf5")
+    weights = load_weights(filename)
     if need_threshold:
         final_weights_list = []
         for item in weights:
@@ -489,61 +474,24 @@ def plot_predict_from_saved_weights(filename,threshold = 0.01,need_threshold = F
     y_min = data["y_min_tr"][0][0]
     y_max = data["y_max_tr"][0][0]
     print(y_min,y_max)
-    from sklearn.metrics import mean_squared_error, mean_absolute_error
     mse = mean_squared_error(y_predicted,y_test)
     print("unscaled mse:{:.2e}".format(mse))
     
     y_predicted_rescaled = y_predicted * (y_max - y_min) + y_min
     y_test_rescaled = y_test * (y_max - y_min) + y_min
-    rescaled_mse = mean_squared_error(y_predicted_rescaled,y_test_rescaled)
-    rescaled_mae = mean_absolute_error(y_predicted_rescaled,y_test_rescaled)
-    print("rescaled mse:{:.2e}".format(rescaled_mse))
-    print("rescaled mae:{:.2e}".format(rescaled_mae))
+    rescaled_MSE = mean_squared_error(y_predicted_rescaled,y_test_rescaled)
+    rescaled_MAE = mean_absolute_error(y_predicted_rescaled,y_test_rescaled)
+    print("rescaled mse:{:.2e}".format(rescaled_MSE))
+    print("rescaled mae:{:.2e}".format(rescaled_MAE))
     
     plt.figure(figsize=(10,8))
     plt.plot(y_test_rescaled[0:2000],label="Real")
     plt.plot(y_predicted_rescaled[0:2000],label="Prediction from formula (5 active inputs)")
     plt.legend()
     
-    # plt.plot(y_test[0:2000])
-    # plt.plot(y_predicted[0:2000])
-    
-    # plt
-    
-plot_predict_from_saved_weights("")
-# equation = "0.194095*sin(0.144496713816698*ar + 0.125905131631247*av + 0.153175317326798*ax + 0.212653774546139*ay + 0.31057809339565*az) - 0.747319900602472"
-# latex = get_latex_equation_from_string(equation)
 
-# clean_latex = latex.replace(r"\left","").replace(r"\right","")
-# print(clean_latex)
 
-    
-# predict_from_saved_weights("",threshold = 0.01)
-    
-# latex = get_equation_from_training_weights()
-# latex = latex.replace(r"\left","" )
-# latex = latex.replace(r"\right","")
-# print(latex)
-# print(var_names)
-
-    
-
-# print()    
-#5 cities , 4 features, 4 lags
-# for i in range(len(var_names)):
-#     if i == 80 :
-#         break
-#     print("i:{},var:{}".format(i,var_names[i]))
-    
-    # if var_names[i] == "ay":
-    #     break
-    
-# print(var_names)
-# count_lags = 0
-# count_features = 0
-# count_cities = 0
 def lag_city_feature_from_var(target_var):
-    # target_var = "cb"
     print("target var:",target_var)
     index_target = dict_vars[target_var]
     print("index target var:",index_target)
@@ -553,110 +501,61 @@ def lag_city_feature_from_var(target_var):
     feature_index = (index_target)- index_lag * 20 - index_city * 4
     print("index_lag:{}, index_city: {}, feature_index:{}".format(index_lag,index_city,feature_index))
     print("lag number :{}, city number: {}, feature number:{}".format(index_lag+1,index_city+1,feature_index+1))
-    return
+    return (index_lag,index_city,feature_index)
 
-
-# for i in range(dict_vars[target_var]):
-#     # if dict_vars
-#     if (i + 1) % 20 == 0:
-#         count_lags += 1
-#     if (i +1) % 4 == 0:
-#         count_features += 1
-#     if (i +1) % 5 == 0:
-#         count_cities += 1
+if __name__ == "__main__":
+    use_rescaled_loss = config["use_rescaled_MSE"]
+    number_epochs1 = config["epochs1"]
+    number_epochs2 = config["epochs2"]
+    threshold_value = config["threshold_value"]
+    a_L_05 = config["a_L_0.5"]
+    use_phase2 = config["use_phase2"]
+    use_threshold_before_phase2 = config["use_thresholding_before_phase2"]
+    lambda_reg = config["lambda_reg"]
+    batch_size = config["batch_size"]
+    first_phase_lr = config["phase1_lr"]
+    second_phase_lr = config["phase2_lr"]
+    eql_number_layers = config["eql_number_layers"]
+    optimizer = config["optimizer"]
+    use_regularization_phase2 = config["optimizer"]
+    number_trials = config["number_trials"]
     
-# print(count_lags,count_features,count_cities)
+    if optimizer == "rmsprop":
+        train_optimizer = tf.keras.optimizers.RMSprop(learning_rate=first_phase_lr)
+        validation_optimizer = tf.keras.optimizers.RMSprop(learning_rate=second_phase_lr)
+    elif optimizer == "adam":
+        train_optimizer = tf.keras.optimizers.Adam(learning_rate=first_phase_lr)
+        validation_optimizer = tf.keras.optimizers.Adam(learning_rate=second_phase_lr)
+    else:
+        sys.exit("Invalid optimizer, exiting ...")
     
-    
-    
-    
+    #5 cities , 4 features, 4 lags
+    nutils.get_folders_started()
+    best_val_model,best_val_weights = train_non_masked(number_epochs1,train_optimizer,use_rescaled_loss)
+    if use_phase2:
+        dict_phase2 = {
+            "threshold":threshold_value,
+            "use_threshold":use_threshold_before_phase2,
+            "use_rescaled_loss":use_rescaled_loss,
+            "reg_weight":lambda_reg
+            }
+        print()
+        print("-"*30)
+        print("-"*6+" Start of phase 2 "+"-"*6)
+        print("-"*30)
+        print()
+        # best_masked_model,best_masked_weights =  train_masked(best_val_weights=None,\
+        #                                                       epochs_second_phase=epochs_second_phase,\
+        #                                                           from_file=True,filename="nt_val_weights_5.49e-03.hdf5")
+        
+        m_model,m_weights =  train_masked(best_val_model,number_epochs2,from_file=False)
         
     
 
-
-# print(data["Xtr"].shape)
-
-#5 cities , 4 features, 4 lags
-
-        
-# x = get_x_right_format("train")
-# print(x.shape)
-
-
     
-# plot_output_test_data()
-# temp2 = np.where(temp>0.01)
-# print(temp2)
-# mask = ma.masked_where(temp < 0.01, temp).set_fill_value()
-# print(mask)
-
-# plt.hist(temp,density=True) 
-# plt.title("Weights between input and first layer") 
-# plt.show()
-
-# new_model =  SymbolicNet(n_layers,
-#                               funcs=activation_funcs,
-#                               initial_weights=weights)
-
-
-
-
-
-
-# weights = model.get_weights()
-
-# save_weights(weights)
-epochs_first_phase = 100
-epochs_second_phase = 100
-# best_val_model,best_val_weights = train_non_masked(epochs_first_phase)
-# print()
-# print("-"*30)
-# print("-"*6+" Start of phase 2 "+"-"*6)
-# print("-"*30)
-# print()
-# best_masked_model,best_masked_weights =  train_masked(best_val_weights=None,\
-#                                                       epochs_second_phase=epochs_second_phase,\
-#                                                           from_file=True,filename="val_weights_5.38e-03.hdf5")
-
-
-        
-#strategy = tf.distribute.MirroredStrategy()
-#print ('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-# print(tf.config.list_physical_devices('GPU'))
-# train_non_masked()
-# import numpy as np
-# a = np.array([1,2,4]).astype('float32')
-# b = np.array([2,5,6]).astype('float32')
-# temp = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)(a, b)
-# print(temp)
-# a = np.array([[1, 2, 3], [4, 5, 6]])
-# c = tf.constant(a)
-# threshold = 1
-# weights = model.get_weights()
-# masked_weights = []
-# for w_i in weights:
-#     mask = tf.cast(tf.constant(tf.abs(w_i) > threshold),tf.float32)
-#     masked_weights.append(tf.multiply(w_i, mask))
     
-# masked_model = SymbolicNet(n_layers,
-#                           funcs=activation_funcs,
-#                           initial_weights=masked_weights)
-
-# weights2 = model.get_weights()
-
-# weights_list = []
-# for item in weights2:
-#     weights_list.append(item.numpy())
-
-
-# expr = pretty_print.network(weights_list, activation_funcs, var_names[:x_dim])
-# print("Formula from pretty print:",expr)
-
     
-# filename = "step1.mat"
-# # filename = "step2.mat"
-# data = loadmat('Denmark_data/{}'.format(filename))
-# print(data.keys())
-
+    
+    
 
 
