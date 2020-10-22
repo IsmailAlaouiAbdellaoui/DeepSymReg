@@ -6,10 +6,10 @@ Created on Mon Oct 19 14:54:34 2020
 """
 
 config = {"use_rescaled_MSE":False,
-          "epochs1":100,
-          "epochs2":100,
+          "epochs1":3,
+          "epochs2":3,
           "threshold_value":0.01,
-          "a_L_0.5":0.05,
+          "a_L_0.5":5e-2,
           "use_phase2":True,
           "use_thresholding_before_phase2":True,
           "lambda_reg":5e-3,
@@ -22,7 +22,8 @@ config = {"use_rescaled_MSE":False,
           "number_trials":1,
           "steps_ahead":6,
           "phase2_from_file":False,
-          "non_masked_weight_file":None
+          "non_masked_weight_file":None,
+          "type_loss":"l12_smooth"
           }
 
 #eql functions

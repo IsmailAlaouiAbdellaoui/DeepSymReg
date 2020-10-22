@@ -1,0 +1,28 @@
+use_rescaled_MSE: False
+epochs1: 100
+epochs2: 100
+threshold_value: 0.01
+a_L_0.5: 0.005
+use_phase2: True
+use_thresholding_before_phase2: True
+lambda_reg: 0.005
+batch_size: 200
+phase1_lr: 0.0001
+phase2_lr: 1e-05
+eql_number_layers: 2
+optimizer: rmsprop
+use_regularization_phase2: True
+number_trials: 1
+steps_ahead: 6
+phase2_from_file: False
+non_masked_weight_file: None
+phase 1 best MSE validation: 0.005580200348049402
+sparsity1 phase1: 0.0
+sparsity2 phase1: 0.0
+sparsity3 phase1: 0.0
+sparsity1 phase2 after masking: 99.79166666666667
+sparsity2 phase2 after masking: 96.875
+sparsity3 phase2 after masking: 75.0
+phase 2 best MSE validation: 0.005109947174787521
+Formula after phase2: 1.0349344040608 + 1.04518/(exp(0.274527/(exp(0.235579*ay + 0.371053*az) + 1)) + 1) - 0.475286388070217/(exp(0.235579*ay + 0.371053*az) + 1) - 2.46424512281287/(exp(-0.22531*ay - 0.375939*az) + 1) + 0.937032/(1 + 4079.65*exp(-14.0723/(exp(-0.22531*ay - 0.375939*az) + 1)))
+Latex formula after phase2: $$(1.0349344040608)+\frac{1.04518}{\operatorname{exp}(\frac{0.274527}{\operatorname{exp}((0.235579) ay+(0.371053) az)+(1)})+(1)}-\frac{0.475286388070217}{\operatorname{exp}((0.235579) ay+(0.371053) az)+(1)}-\frac{2.46424512281287}{\operatorname{exp}(-(0.22531) ay-(0.375939) az)+(1)}+\frac{0.937032}{(1)+(4079.65) \operatorname{exp}(\frac{-(14.0723)}{\operatorname{exp}(-(0.22531) ay-(0.375939) az)+(1)})}$$
