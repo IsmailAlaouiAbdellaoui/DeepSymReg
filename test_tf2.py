@@ -319,16 +319,6 @@ def train_non_masked(epochs_first_phase,train_op,use_rescaled_loss,reg_weight,a,
 
 
 
-
-
-
-
-
-
-
-
-
-
 # def train_masked(best_val_weights,epochs_second_phase,use_rescaled_loss,threshold=0.01,from_file = False,filename = None):
 def train_masked(best_val_weights,epochs_second_phase,**kwargs):
     # train_loss_results = []
@@ -622,6 +612,7 @@ if __name__ == "__main__":
     end = time.time()
     span = end - start
     print("Time span of first phase: {}".format(span))
+    nutils.append_text_to_summary(experiment_number,"Time span of first phase: {}".format(span))
     if use_phase2:
         dict_phase2 = {
             "threshold":threshold_value,
@@ -646,6 +637,7 @@ if __name__ == "__main__":
         end = time.time()
         span = end - start
         print("Time span of second phase: {}".format(span))
+        nutils.append_text_to_summary(experiment_number,"Time span of second phase: {}".format(span))
     print("\n\n"+"*"*10+" End of Experiment {} ".format(experiment_number)+"*"*10+"\n\n")
         
 
