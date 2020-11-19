@@ -611,8 +611,8 @@ if __name__ == "__main__":
     best_val_model,best_val_weights = train_non_masked(number_epochs1,phase1_optimizer,use_rescaled_loss,lambda_reg,a_L_05,experiment_number)
     end = time.time()
     span = end - start
-    print("Time span of first phase: {}".format(span))
-    nutils.append_text_to_summary(experiment_number,"Time span of first phase: {}".format(span))
+    print("Time span of first phase: {}\n".format(span))
+    nutils.append_text_to_summary(experiment_number,"Time span of first phase: {}\n".format(span))
     if use_phase2:
         dict_phase2 = {
             "threshold":threshold_value,
